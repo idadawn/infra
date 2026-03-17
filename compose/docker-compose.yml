@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # MySQL 数据库
+  mysql:
+    image: mysql:8.0
+    container_name: ${PROJECT_NAME:-infra}-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-app_db}
+      MYSQL_USER: ${MYSQL_USER:-app_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-app_pass}
+      TZ: ${MYSQL_TZ:-+08:00}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/conf/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - ${NETWORK_NAME:-infra_network}
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+08:00
+      - --max-connections=1000
+
+  # Redis 缓存
+  redis:
+    image: redis:7.0-alpine
+    container_name: ${PROJECT_NAME:-infra}-redis
+    restart: always
+    command: >
+      sh -c 'exec redis-server
+      --requirepass ${REDIS_PASSWORD:-redis_pass}
+      --port 6379
+      --bind 0.0.0.0
+      --protected-mode yes
+      --appendonly yes'
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+      - ./redis/conf/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - ${NETWORK_NAME:-infra_network}
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+# 持久化卷
+volumes:
+  mysql_data:
+    name: ${PROJECT_NAME:-infra}_mysql_data
+    driver: local
+  redis_data:
+    name: ${PROJECT_NAME:-infra}_redis_data
+    driver: local
+
+# 网络
+networks:
+  infra_network:
+    name: ${NETWORK_NAME:-infra_network}
+    driver: bridge
