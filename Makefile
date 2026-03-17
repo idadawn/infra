@@ -1,7 +1,7 @@
 # Makefile - Infra 基础设施管理工具
 # 作者：idadawn
 
-.PHONY: help up down restart logs ps health backup-mysql backup-redis restore-mysql k8s-apply k8s-delete k8s-status clean
+.PHONY: help up down restart logs ps health backup-mysql backup-redis backup-neo4j restore-mysql mysql-up mysql-down mysql-logs redis-up redis-down redis-logs neo4j-up neo4j-down neo4j-logs k8s-apply k8s-delete k8s-status clean
 
 # 配置变量
 PROJECT_NAME ?= infra
@@ -77,23 +77,88 @@ logs-mysql: check-docker ## 查看 MySQL 日志
 logs-redis: check-docker ## 查看 Redis 日志
 	docker-compose -f $(COMPOSE_FILE) logs -f redis
 
+logs-neo4j: check-docker ## 查看 Neo4j 日志
+	docker-compose -f $(COMPOSE_FILE) logs -f neo4j
+
+##@ 单个服务管理
+
+mysql-up: check-env check-docker ## 启动 MySQL 服务
+	@echo "$(COLOR_INFO)正在启动 MySQL...$(COLOR_RESET)"
+	docker-compose -f $(COMPOSE_FILE) --env-file $(ENV_FILE) up -d mysql
+	@echo "$(COLOR_SUCCESS)✓ MySQL 启动成功$(COLOR_RESET)"
+
+mysql-down: check-docker ## 停止 MySQL 服务
+	@echo "$(COLOR_INFO)正在停止 MySQL...$(COLOR_RESET)"
+	docker-compose -f $(COMPOSE_FILE) stop mysql
+	@echo "$(COLOR_SUCCESS)✓ MySQL 已停止$(COLOR_RESET)"
+
+mysql-logs: check-docker ## 查看 MySQL 日志
+	docker-compose -f $(COMPOSE_FILE) logs -f mysql
+
+redis-up: check-env check-docker ## 启动 Redis 服务
+	@echo "$(COLOR_INFO)正在启动 Redis...$(COLOR_RESET)"
+	docker-compose -f $(COMPOSE_FILE) --env-file $(ENV_FILE) up -d redis
+	@echo "$(COLOR_SUCCESS)✓ Redis 启动成功$(COLOR_RESET)"
+
+redis-down: check-docker ## 停止 Redis 服务
+	@echo "$(COLOR_INFO)正在停止 Redis...$(COLOR_RESET)"
+	docker-compose -f $(COMPOSE_FILE) stop redis
+	@echo "$(COLOR_SUCCESS)✓ Redis 已停止$(COLOR_RESET)"
+
+redis-logs: check-docker ## 查看 Redis 日志
+	docker-compose -f $(COMPOSE_FILE) logs -f redis
+
+neo4j-up: check-env check-docker ## 启动 Neo4j 服务
+	@echo "$(COLOR_INFO)正在启动 Neo4j...$(COLOR_RESET)"
+	docker-compose -f $(COMPOSE_FILE) --env-file $(ENV_FILE) up -d neo4j
+	@echo "$(COLOR_SUCCESS)✓ Neo4j 启动成功$(COLOR_RESET)"
+	@echo "$(COLOR_INFO)Neo4j 浏览器界面: http://localhost:7474$(COLOR_RESET)"
+
+neo4j-down: check-docker ## 停止 Neo4j 服务
+	@echo "$(COLOR_INFO)正在停止 Neo4j...$(COLOR_RESET)"
+	docker-compose -f $(COMPOSE_FILE) stop neo4j
+	@echo "$(COLOR_SUCCESS)✓ Neo4j 已停止$(COLOR_RESET)"
+
+neo4j-logs: check-docker ## 查看 Neo4j 日志
+	docker-compose -f $(COMPOSE_FILE) logs -f neo4j
+
 ##@ 健康检查
 
 health: check-docker ## 检查所有服务健康状态
 	@echo "$(COLOR_INFO)正在检查服务健康状态...$(COLOR_RESET)"
 	@echo ""
 	@echo "$(COLOR_INFO)MySQL 状态:$(COLOR_RESET)"
-	@if docker exec $$(docker ps -q -f name=$(PROJECT_NAME)-mysql) mysqladmin ping -h localhost -uroot -p$$(grep MYSQL_ROOT_PASSWORD $(ENV_FILE) | cut -d '=' -f2) > /dev/null 2>&1; then \
-		echo "  $(COLOR_SUCCESS)✓ MySQL 运行正常$(COLOR_RESET)"; \
+	@if docker ps -q -f name=$(PROJECT_NAME)-mysql | grep -q .; then \
+		if docker exec $$(docker ps -q -f name=$(PROJECT_NAME)-mysql) mysqladmin ping -h localhost -uroot -p$$(grep MYSQL_ROOT_PASSWORD $(ENV_FILE) | cut -d '=' -f2) > /dev/null 2>&1; then \
+			echo "  $(COLOR_SUCCESS)✓ MySQL 运行正常$(COLOR_RESET)"; \
+		else \
+			echo "  $(COLOR_ERROR)✗ MySQL 异常$(COLOR_RESET)"; \
+		fi \
 	else \
-		echo "  $(COLOR_ERROR)✗ MySQL 异常$(COLOR_RESET)"; \
+		echo "  $(COLOR_WARNING)○ MySQL 未运行$(COLOR_RESET)"; \
 	fi
 	@echo ""
 	@echo "$(COLOR_INFO)Redis 状态:$(COLOR_RESET)"
-	@if docker exec $$(docker ps -q -f name=$(PROJECT_NAME)-redis) redis-cli -a $$(grep REDIS_PASSWORD $(ENV_FILE) | cut -d '=' -f2) ping > /dev/null 2>&1; then \
-		echo "  $(COLOR_SUCCESS)✓ Redis 运行正常$(COLOR_RESET)"; \
+	@if docker ps -q -f name=$(PROJECT_NAME)-redis | grep -q .; then \
+		if docker exec $$(docker ps -q -f name=$(PROJECT_NAME)-redis) redis-cli -a $$(grep REDIS_PASSWORD $(ENV_FILE) | cut -d '=' -f2) ping > /dev/null 2>&1; then \
+			echo "  $(COLOR_SUCCESS)✓ Redis 运行正常$(COLOR_RESET)"; \
+		else \
+			echo "  $(COLOR_ERROR)✗ Redis 异常$(COLOR_RESET)"; \
+		fi \
 	else \
-		echo "  $(COLOR_ERROR)✗ Redis 异常$(COLOR_RESET)"; \
+		echo "  $(COLOR_WARNING)○ Redis 未运行$(COLOR_RESET)"; \
+	fi
+	@echo ""
+	@echo "$(COLOR_INFO)Neo4j 状态:$(COLOR_RESET)"
+	@if docker ps -q -f name=$(PROJECT_NAME)-neo4j | grep -q .; then \
+		if wget --no-verbose --tries=1 --spider http://localhost:$$(grep NEO4J_HTTP_PORT $(ENV_FILE) | cut -d '=' -f2) 2>&1 | grep -q "200 OK\|OK"; then \
+			echo "  $(COLOR_SUCCESS)✓ Neo4j 运行正常$(COLOR_RESET)"; \
+			echo "  浏览器: http://localhost:$$(grep NEO4J_HTTP_PORT $(ENV_FILE) | cut -d '=' -f2)"; \
+		else \
+			echo "  $(COLOR_ERROR)✗ Neo4j 异常$(COLOR_RESET)"; \
+		fi \
+	else \
+		echo "  $(COLOR_WARNING)○ Neo4j 未运行$(COLOR_RESET)"; \
 	fi
 
 ##@ 备份与恢复
@@ -120,7 +185,15 @@ backup-redis: check-docker ## 备份 Redis 数据
 		BGSAVE
 	@echo "$(COLOR_SUCCESS)✓ Redis 备份完成$(COLOR_RESET)"
 
-backup: backup-mysql backup-redis ## 备份所有数据
+backup-neo4j: check-docker ## 备份 Neo4j 数据
+	@echo "$(COLOR_INFO)正在备份 Neo4j 数据...$(COLOR_RESET)"
+	@mkdir -p $(BACKUP_PATH)
+	@docker exec $$(docker ps -q -f name=$(PROJECT_NAME)-neo4j) cypher-shell -u neo4j -p $$(grep NEO4J_AUTH $(ENV_FILE) | cut -d'/' -f2) "CALL apoc.export.graphml.all('neo4j_$$(date +%Y%m%d_%H%M%S).graphml', {})" || \
+	docker exec $$(docker ps -q -f name=$(PROJECT_NAME)-neo4j) neo4j-admin dump --database=neo4j --to=/data/neo4j_$$(date +%Y%m%d_%H%M%S).dump
+	@docker cp $$(docker ps -q -f name=$(PROJECT_NAME)-neo4j):/data/neo4j_$$(date +%Y%m%d_%H%M%S).dump $(BACKUP_PATH)/
+	@echo "$(COLOR_SUCCESS)✓ Neo4j 备份完成$(COLOR_RESET)"
+
+backup: backup-mysql backup-redis backup-neo4j ## 备份所有数据
 
 restore-mysql: ## 恢复 MySQL 数据库（用法: make restore-mysql FILE=backup.sql）
 	@if [ -z "$(FILE)" ]; then \

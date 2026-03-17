@@ -111,6 +111,7 @@ docker-compose -f compose/docker-compose.yml ps
 |------|------|------|
 | MySQL | 3306 | 关系型数据库 |
 | Redis | 6379 | 缓存/消息队列 |
+| Neo4j | 7474, 7687 | 图数据库 |
 
 ## 🛠️ 常用命令
 
@@ -125,11 +126,31 @@ make ps          # 查看服务状态
 make health      # 健康检查
 ```
 
+### 按需启动单个服务
+
+```bash
+# MySQL
+make mysql-up        # 启动 MySQL
+make mysql-down      # 停止 MySQL
+make mysql-logs      # 查看 MySQL 日志
+
+# Redis
+make redis-up        # 启动 Redis
+make redis-down      # 停止 Redis
+make redis-logs      # 查看 Redis 日志
+
+# Neo4j
+make neo4j-up        # 启动 Neo4j
+make neo4j-down      # 停止 Neo4j
+make neo4j-logs      # 查看 Neo4j 日志
+```
+
 ### 备份与恢复
 
 ```bash
 make backup-mysql    # 备份 MySQL 数据库
 make backup-redis    # 备份 Redis 数据
+make backup-neo4j    # 备份 Neo4j 数据
 make restore-mysql   # 恢复 MySQL 数据库
 ```
 
@@ -165,6 +186,18 @@ make k8s-status      # 查看 K8s 资源状态
 - 数据库数量：16
 
 可通过修改 `compose/redis/conf/redis.conf` 自定义配置。
+
+### Neo4j 配置
+
+- 默认用户：`neo4j`
+- HTTP 端口：7474（浏览器界面）
+- Bolt 端口：7687（驱动连接）
+- 初始内存：512MB
+- 最大内存：1GB
+
+首次启动后，请访问 http://localhost:7474 并修改默认密码。
+
+可通过修改 `compose/neo4j/conf/neo4j.conf` 自定义配置。
 
 ## 🌍 多环境部署
 

@@ -114,6 +114,41 @@ else
 fi
 
 echo ""
+
+# 检查 Neo4j
+echo -e "${BLUE}[Neo4j]${NC}"
+NEO4J_CONTAINER=$(docker ps -q -f name="${PROJECT_NAME}-neo4j" || true)
+
+if [ -z "$NEO4J_CONTAINER" ]; then
+    echo -e "  状态: ${RED}未运行${NC}"
+else
+    # 检查容器健康状态
+    NEO4J_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' "$NEO4J_CONTAINER" 2>/dev/null || echo "unknown")
+
+    case $NEO4J_HEALTH in
+        healthy)
+            echo -e "  状态: ${GREEN}健康${NC}"
+            ;;
+        unhealthy)
+            echo -e "  状态: ${YELLOW}不健康${NC}"
+            ;;
+        *)
+            echo -e "  状态: ${YELLOW}未知${NC}"
+            ;;
+    esac
+
+    # 尝试连接
+    NEO4J_HTTP_PORT=$(grep NEO4J_HTTP_PORT "$ENV_FILE" | cut -d '=' -f2)
+    if wget --no-verbose --tries=1 --spider "http://localhost:${NEO4J_HTTP_PORT}" &>/dev/null; then
+        echo -e "  连接: ${GREEN}成功${NC}"
+        echo -e "  浏览器: ${GREEN}http://localhost:${NEO4J_HTTP_PORT}${NC}"
+        echo -e "  Bolt端口: ${NEO4J_BOLT_PORT:-7687}"
+    else
+        echo -e "  连接: ${RED}失败${NC}"
+    fi
+fi
+
+echo ""
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}    检查完成${NC}"
 echo -e "${BLUE}========================================${NC}"
